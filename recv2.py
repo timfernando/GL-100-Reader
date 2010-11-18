@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # encoding: utf-8
 """
-recv.py
+recv2.py
 
 Created by Tim Fernando on 2010-11-16.
-Copyright (c) 2010 __MyCompanyName__. All rights reserved.
+Copyright (c) 2010 University of Oxford. All rights reserved.
 """
 
 import socket
@@ -40,8 +40,8 @@ def parse_data(data):
     print "-"*35
     
     location_responses = {'GTLBC': "Location Base Call", 'GTTRI': "Timed Report Information",'GTSZI': "Safe Zone Information",'GTSOS': "Save Our Souls",'GTRTL': "Real Time Location"}
-    power_responses = {'GTPNA': "Power On Alarm",'GTPFA': "Power Off Alarm",'GTPLA': "Power Low Alarm"}
-    unit_information_responses = ['GTCID','GTHWV']
+    power_responses = {'GTPNA': "Power On Alarm",'GTPFA': "Power Off Alarm",'GTPLA': "Power Low Alarm", 'GTCBC': "Battery Check Response"}
+    general_information_responses = {'GTCID': "CID Info?",'GTHWV': "Hardware Information?", 'GTINF': "General Information?"}
     
     header_type, header_tail = data[0].split(":")
     
@@ -49,36 +49,51 @@ def parse_data(data):
         # Location Responses 
         if header_tail in location_responses:
             print location_responses[header_tail]
-            if header_tail == 'GTTRI':
-                keys = ['code', 'IMEI', 'responses', 'zone_id', 'zone_alert', 'gps_fix', 'speed', 'heading', 'altitude', 'gps_accuracy', 'longitude', 'latitude', 'send_time']
-                return dict(zip(keys,data))
-    
+            if header_tail == 'GTTRI': # Possible to have variable entries here
+                keys = ['code', 'IMEI', 'responses', 'zone_id', 'zone_alert', 'gps_fix', 'speed', 'heading', 'altitude', 'gps_accuracy', 'longitude', 'latitude', 'send_time', 'u234', 'u10', 'u08d2']
+            elif header_tail == 'GTRTL': # GTRTL does not use the 'responses' field
+                keys = ['code', 'IMEI', 'UNUSED' , 'zone_id', 'zone_alert', 'gps_fix', 'speed', 'heading', 'altitude', 'gps_accuracy', 'longitude', 'latitude', 'send_time', 'u234', 'u10', 'u08d2', 'u1', 'u2', 'message_id', 'u99']
             elif header_tail == 'GTLBC':
-                keys = ['code', 'IMEI', 'requesting_phone_number', 'uGPS_fix', 'uSpeed', 'heading', 'uAltitude', 'uGPS_accuracy', 'longitude', 'latitude', 'send_time', 'u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7']        
-                return dict(zip(keys,data))
+                keys = ['code', 'IMEI', 'requesting_phone_number', 'gps_fix', 'speed', 'heading', 'uAltitude', 'uGPS_accuracy', 'longitude', 'latitude', 'send_time', 'u234', 'u10', 'u08d2', 'u1', 'u2', 'message_id', 'u99']        
+            else:  # GTSZI, GTSOS -- Probably similar to GTTRI/GTRTL
+                keys = ['code', 'IMEI']
+            return dict(zip(keys,data))
     
         # Power Response
+        # TESTED
         elif header_tail in power_responses:
             print power_responses[header_tail]
-            keys = ['code', 'IMEI', 'send_time', 'u1', 'u2']
-            return dict(zip(keys,data))
+            if header_tail == 'GTCBC': 
+                keys = ['code', 'IMEI', 'battery_charge', 'send_time', 'message_id', 'u99']
+            else: # GTPNA, GTPLA, GTPFA
+                keys = ['code', 'IMEI', 'send_time', 'message_id', 'u99']
+            return dict(zip(keys,data))    
         
-        # Hardware/Software Unit Info 
-        elif header_tail in unit_information_responses:
-            print "CID Information or Hardware Information"
-            if header_tail == 'GTCID':
+        # Hardware/Software/Sim Info 
+        # TWO UNTESTED
+        elif header_tail in general_information_responses:
+            print general_information_responses[header_tail]
+            if header_tail == 'GTINF': # Checked
+                keys = ['code', 'IMEI', 'sim_id', 'uINF_1', 'uINF_2', 'battery_charge', 'uINF_3', 'send_time', 'message_id', 'u99']
+            elif header_tail == 'GTCID': # TODO Untested
                 keys = ['code', 'IMEI', 'CID', 'send_time']
-                return dict(zip(keys,data))
-            else:
+            else: # GTHWV -- TODO Untested
                 keys = ['code', 'IMEI', 'hardware_version', 'send_time']
-                return dict(zip(keys,data))
+            return dict(zip(keys,data))
 
+        # Heartbeat Response - only happens when a persistent GPRS session is active
         # UNTESTED
         elif header_tail == 'GTHBD':
             print "Heartbeat response from unit"
             keys = ['code', _, 'IMEI', 'send_time']
             return dict(zip(keys,data))
             
+        # GTGEO - Unknown
+        # UNTESTED
+        elif header_tail == 'GTGEO':
+            print "GTGEO Response"
+            return {}
+    
         else: return {}
 
     else:
