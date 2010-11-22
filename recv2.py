@@ -46,59 +46,61 @@ def parse_data(data):
     header_type, header_tail = data[0].split(":")
     
     if header_type == '+RESP':
+        # Constructing a list of keys to be zipped with data list - keys vary according to contents. 
+        keys = ['code', 'IMEI']
+        
         # Location Responses 
         if header_tail in location_responses:
             print location_responses[header_tail]
-            if header_tail == 'GTTRI': # Possible to have variable entries here
-                keys = ['code', 'IMEI', 'responses', 'zone_id', 'zone_alert', 'gps_fix', 'speed', 'heading', 'altitude', 'gps_accuracy', 'longitude', 'latitude', 'send_time', 'u234', 'u10', 'u08d2']
-            elif header_tail == 'GTRTL': # GTRTL does not use the 'responses' field
-                keys = ['code', 'IMEI', 'UNUSED' , 'zone_id', 'zone_alert', 'gps_fix', 'speed', 'heading', 'altitude', 'gps_accuracy', 'longitude', 'latitude', 'send_time', 'u234', 'u10', 'u08d2', 'u1', 'u2', 'message_id', 'u99']
-            elif header_tail == 'GTLBC':
-                keys = ['code', 'IMEI', 'requesting_phone_number', 'gps_fix', 'speed', 'heading', 'uAltitude', 'uGPS_accuracy', 'longitude', 'latitude', 'send_time', 'u234', 'u10', 'u08d2', 'u1', 'u2', 'message_id', 'u99']        
-            else:  # GTSZI, GTSOS -- Probably similar to GTTRI/GTRTL
-                keys = ['code', 'IMEI']
-            return dict(zip(keys,data))
-    
+            if header_tail == 'GTLBC': # Used as a response to when the device is rung
+                keys.extend(['requesting_phone_number', 'gps_fix', 'speed', 'heading', 'altitude', 'gps_accuracy', 'longitude', 'latitude', 'send_time', 'u234', 'u10', 'u08d2', 'u1', 'u2'])
+            elif header_tail == 'GTTRI': # Possible to have a variable number of entries in this one packet (dependant on 'responses')
+                keys.extend(['responses', 'zone_id', 'zone_alert', 'gps_fix', 'speed', 'heading', 'altitude', 'gps_accuracy', 'longitude', 'latitude', 'send_time', 'u234', 'u10', 'u08d2', 'u1', 'u2'])
+            else:  # GTRTL, GTSZI, GTSOS do not use the 'responses' field
+                keys.extend(['responses' , 'zone_id', 'zone_alert', 'gps_fix', 'speed', 'heading', 'altitude', 'gps_accuracy', 'longitude', 'latitude', 'send_time', 'u234', 'u10', 'u08d2', 'u1', 'u2'])
+            
         # Power Response
         # TESTED
         elif header_tail in power_responses:
             print power_responses[header_tail]
             if header_tail == 'GTCBC': 
-                keys = ['code', 'IMEI', 'battery_charge', 'send_time', 'message_id', 'u99']
-            else: # GTPNA, GTPLA, GTPFA
-                keys = ['code', 'IMEI', 'send_time', 'message_id', 'u99']
-            return dict(zip(keys,data))    
+                keys.extend(['battery_charge'])
+            # GTPNA, GTPLA, GTPFA don't return anything else
+            keys.extend(['send_time'])
         
         # Hardware/Software/Sim Info 
         # TWO UNTESTED
         elif header_tail in general_information_responses:
             print general_information_responses[header_tail]
             if header_tail == 'GTINF': # Checked
-                keys = ['code', 'IMEI', 'sim_id', 'uINF_1', 'uINF_2', 'battery_charge', 'uINF_3', 'send_time', 'message_id', 'u99']
+                keys.extend(['sim_id', 'uINF_1', 'uINF_2', 'battery_charge', 'uINF_3'])
             elif header_tail == 'GTCID': # TODO Untested
-                keys = ['code', 'IMEI', 'CID', 'send_time']
+                keys.extend(['CID'])
             else: # GTHWV -- TODO Untested
-                keys = ['code', 'IMEI', 'hardware_version', 'send_time']
-            return dict(zip(keys,data))
+                keys.extend(['hardware_version'])
+            keys.extend(['send_time'])
 
         # Heartbeat Response - only happens when a persistent GPRS session is active
         # UNTESTED
         elif header_tail == 'GTHBD':
             print "Heartbeat response from unit"
-            keys = ['code', _, 'IMEI', 'send_time']
-            return dict(zip(keys,data))
-            
+            keys.extend(['send_time'])
+
         # GTGEO - Unknown
         # UNTESTED
         elif header_tail == 'GTGEO':
             print "GTGEO Response"
             return {}
     
-        else: return {}
-
+        else: return {} # GTBTC ?
+        
+        keys.extend(['message_id', 'u0102100203'])
+        
     else:
         print "Received Acknowledgement Message"
         return {}
+    
+    return dict(zip(keys,data))
         
 def main():
     s = get_socket()
